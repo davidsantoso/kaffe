@@ -1,7 +1,7 @@
 defmodule Kaffe.Subscriber do
   @moduledoc """
   Consume messages from a single partition of a single Kafka topic.
-  
+
   Assignments are received from a group consumer member, `Kaffe.GroupMember`.
 
   Messages are delegated to `Kaffe.Worker`. The worker is expected to cast back
@@ -48,6 +48,10 @@ defmodule Kaffe.Subscriber do
 
   def ack_messages(subscriber_pid, topic, partition, generation_id, offset) do
     GenServer.cast(subscriber_pid, {:ack_messages, topic, partition, generation_id, offset})
+  end
+
+  def consume_more_messages(subscriber_pid, offset) do
+    GenServer.cast(subscriber_pid, {:consume_more_messages, offset})
   end
 
   def init([subscriber_name, group_coordinator_pid, worker_pid,
@@ -112,6 +116,16 @@ defmodule Kaffe.Subscriber do
     # Update the offsets in the group
     :ok = group_coordinator().ack(state.group_coordinator_pid, state.gen_id,
         state.topic, state.partition, offset)
+    # Request more messages from the consumer
+    :ok = kafka().consume_ack(state.subscriber_pid, offset)
+
+    {:noreply, state}
+  end
+
+  def handle_cast({:consume_more_messages, offset}, state) do
+
+    Logger.debug "Ready to consume more messages of #{state.topic} / #{state.partition} at offset: #{offset}. Offset has not been commited back"
+
     # Request more messages from the consumer
     :ok = kafka().consume_ack(state.subscriber_pid, offset)
 
